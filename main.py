@@ -8,13 +8,19 @@ from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
 from pymongo import AsyncMongoClient
 
+from logger import init_logger
 from models.configuration import Configuration
 from requests.update_configuration_request import UpdateConfigurationRequest
 
+logger = init_logger("rex-radio.daemon.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info(f"Starting API server")
+
+    logger.info("🔌 Loading .env")
     load_dotenv()
+    logger.info("✅ .env loaded")
 
     mongodb_uri = os.getenv("MONGO_URI", "")
 
