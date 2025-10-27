@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
 from pymongo import AsyncMongoClient
+from redis import asyncio as aioredis
 
 from logger import init_logger
 from models.configuration import Configuration
@@ -22,6 +23,8 @@ async def lifespan(app: FastAPI):
     load_dotenv()
     logger.info("✅ .env loaded")
 
+    # MongoDB
+    logger.info("🔌 Loading MongoDB")
     mongodb_uri = os.getenv("MONGO_URI", "")
 
     client = AsyncMongoClient(mongodb_uri)
@@ -29,6 +32,14 @@ async def lifespan(app: FastAPI):
     await init_beanie(database=db, document_models=[Configuration])
 
     app.state.mongo_client = client
+    logger.info("✅ MongoDB connected")
+
+    # Redis
+    logger.info("🔌 Loading Redis")
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    redis = aioredis.from_url(redis_url, decode_responses=True)
+    app.state.redis = redis
+    logger.info("✅ Redis connected")
 
     yield
 
