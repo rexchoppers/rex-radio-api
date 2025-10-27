@@ -26,7 +26,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-
 @app.get("/")
 async def read_root():
     print(Configuration.find_all())
