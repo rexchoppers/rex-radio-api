@@ -10,7 +10,7 @@ def init_logger(name: str):
 
     handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter(
-        "[%(asctime)s] [%(processName)s] [%(levelname)s] %(name)s: %(message)s",
+        "[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
         "%Y-%m-%d %H:%M:%S",
     )
     handler.setFormatter(formatter)
