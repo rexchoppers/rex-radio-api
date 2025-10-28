@@ -3,7 +3,7 @@ import hmac
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Literal
 
 from beanie import init_beanie
 from dotenv import load_dotenv
@@ -61,23 +61,25 @@ async def read_root():
     return {"Hello": "World"}
 
 @app.get("/config/{field}")
-async def read_configuration(field: str):
+async def read_configuration(field: Literal["name", "description"]):
     config = await Configuration.find_one(Configuration.field == field)
-    if config:
+
+    if not config:
         return JSONResponse(
             {
-                "field": config.field,
-                "value": config.value
+                "field": field,
+                "value": None
             },
             status_code=200
         )
-    else:
-        return JSONResponse(
-            {
-                "error": "Configuration not found"
-            },
-            status_code=400
-        )
+
+    return JSONResponse(
+        {
+            "field": config.field,
+            "value": config.value
+        },
+        status_code=200
+    )
 
 
 @app.patch("/config")
@@ -109,8 +111,12 @@ def verify_signature(method: str, path: str, body: bytes, timestamp: str, signat
     # Build message in a consistent format
     message = f"{timestamp}{method}{path}".encode() + body
 
+    print(f"Message: {message}")
+
     # Generate expected HMAC
     expected_sig = hmac.new(secret, message, hashlib.sha512).hexdigest()
+
+    print(f"Expected signature: {expected_sig}")
 
     # Constant-time compare to avoid timing attacks
     return hmac.compare_digest(expected_sig, signature)
@@ -124,7 +130,11 @@ async def hmac_auth(request: Request, call_next):
     signature = request.headers.get("x-signature")
     timestamp = request.headers.get("x-timestamp")
 
+    print(f"Signature: {signature}")
+    print(f"Timestamp: {timestamp}")
+
     if not signature or not timestamp:
+        print("Missing signature or timestamp")
         return JSONResponse(
             {"error": "Missing signature or timestamp"},
             status_code=401
@@ -144,6 +154,7 @@ async def hmac_auth(request: Request, call_next):
         return JSONResponse({"error": "Server misconfiguration (missing HMAC secret)"}, status_code=500)
 
     if not verify_signature(method, path, body, timestamp, signature, secret):
+        print("Invalid or expired signature")
         return JSONResponse(
             {"error": "Invalid or expired signature"},
             status_code=401
