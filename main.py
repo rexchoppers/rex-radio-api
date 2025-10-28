@@ -1,10 +1,13 @@
+import hashlib
+import hmac
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import List
 
 from beanie import init_beanie
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import ValidationError
 from pymongo import AsyncMongoClient
 from redis import asyncio as aioredis
@@ -69,3 +72,33 @@ async def update_configuration(updates: List[UpdateConfigurationRequest]):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def verify_signature(body: bytes, timestamp: str, signature: str, secret: bytes) -> bool:
+    try:
+        if abs(time.time() - float(timestamp)) > 300:
+            return False
+    except ValueError:
+        return False
+
+    msg = timestamp.encode() + body
+    expected_sig = hmac.new(secret, msg, hashlib.sha512).hexdigest()
+
+    return hmac.compare_digest(expected_sig, signature)
+
+@app.middleware("http")
+async def hmac_auth(request: Request, call_next):
+    if request.url.path == "/":
+        return await call_next(request)
+
+    signature = request.headers.get("x-signature")
+    timestamp = request.headers.get("x-timestamp")
+
+    if not signature or not timestamp:
+        raise HTTPException(status_code=401, detail="Missing signature or timestamp")
+
+    body = await request.body()
+
+    if not verify_signature(body, timestamp, signature, request.app.state.hmac_secret):
+        raise HTTPException(status_code=401, detail="Invalid or expired signature")
+
+    return await call_next(request)
