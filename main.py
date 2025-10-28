@@ -56,6 +56,26 @@ async def read_root():
     print(Configuration.find_all())
     return {"Hello": "World"}
 
+@app.get("/config/{field}")
+async def read_configuration(field: str):
+    config = await Configuration.find_one(Configuration.field == field)
+    if config:
+        return JSONResponse(
+            {
+                "field": config.field,
+                "value": config.value
+            },
+            status_code=200
+        )
+    else:
+        return JSONResponse(
+            {
+                "error": "Configuration not found"
+            },
+            status_code=400
+        )
+
+
 @app.patch("/config")
 async def update_configuration(updates: List[UpdateConfigurationRequest]):
     try:
@@ -74,21 +94,27 @@ async def update_configuration(updates: List[UpdateConfigurationRequest]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def verify_signature(body: bytes, timestamp: str, signature: str, secret: bytes) -> bool:
+def verify_signature(method: str, path: str, body: bytes, timestamp: str, signature: str, secret: bytes) -> bool:
     try:
+        # Reject timestamps older/newer than 5 minutes
         if abs(time.time() - float(timestamp)) > 300:
             return False
     except ValueError:
         return False
 
-    msg = timestamp.encode() + body
-    expected_sig = hmac.new(secret, msg, hashlib.sha512).hexdigest()
+    # Build message in a consistent format
+    message = f"{timestamp}{method}{path}".encode() + body
 
+    # Generate expected HMAC
+    expected_sig = hmac.new(secret, message, hashlib.sha512).hexdigest()
+
+    # Constant-time compare to avoid timing attacks
     return hmac.compare_digest(expected_sig, signature)
 
 @app.middleware("http")
 async def hmac_auth(request: Request, call_next):
-    if request.url.path == "/":
+    # Skip authentication for root or docs endpoints
+    if request.url.path in ["/", "/docs", "/openapi.json"]:
         return await call_next(request)
 
     signature = request.headers.get("x-signature")
@@ -100,9 +126,20 @@ async def hmac_auth(request: Request, call_next):
             status_code=401
         )
 
-    body = await request.body()
+    method = request.method.upper()
+    path = request.url.path
 
-    if not verify_signature(body, timestamp, signature, request.app.state.hmac_secret):
+    # Only read body for non-GET requests
+    body = b""
+    if method not in ("GET", "HEAD", "DELETE"):
+        body = await request.body()
+
+    # Verify signature
+    secret = getattr(request.app.state, "hmac_secret", None)
+    if not secret:
+        return JSONResponse({"error": "Server misconfiguration (missing HMAC secret)"}, status_code=500)
+
+    if not verify_signature(method, path, body, timestamp, signature, secret):
         return JSONResponse(
             {"error": "Invalid or expired signature"},
             status_code=401
