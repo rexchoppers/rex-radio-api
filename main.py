@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import ValidationError
 from pymongo import AsyncMongoClient
 from redis import asyncio as aioredis
+from fastapi.responses import JSONResponse
 
 from logger import init_logger
 from models.configuration import Configuration
@@ -94,11 +95,17 @@ async def hmac_auth(request: Request, call_next):
     timestamp = request.headers.get("x-timestamp")
 
     if not signature or not timestamp:
-        raise HTTPException(status_code=401, detail="Missing signature or timestamp")
+        return JSONResponse(
+            {"error": "Missing signature or timestamp"},
+            status_code=401
+        )
 
     body = await request.body()
 
     if not verify_signature(body, timestamp, signature, request.app.state.hmac_secret):
-        raise HTTPException(status_code=401, detail="Invalid or expired signature")
+        return JSONResponse(
+            {"error": "Invalid or expired signature"},
+            status_code=401
+        )
 
     return await call_next(request)
