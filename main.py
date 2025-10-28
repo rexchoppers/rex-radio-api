@@ -27,6 +27,10 @@ async def lifespan(app: FastAPI):
     load_dotenv()
     logger.info("✅ .env loaded")
 
+    logger.info("🔌 Loading HMAC secret")
+    app.state.hmac_secret = os.getenv("HMAC_SECRET", "default_secret").encode()
+    logger.info("✅ HMAC secret loaded")
+
     # MongoDB
     logger.info("🔌 Loading MongoDB")
     mongodb_uri = os.getenv("MONGO_URI", "")
