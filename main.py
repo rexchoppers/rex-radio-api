@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import os
@@ -118,17 +119,14 @@ def verify_signature(method: str, path: str, body: bytes, timestamp: str, signat
     # Build message in a consistent format
     message = f"{timestamp}{method}{path}".encode() + body
 
-    print(f"Message: {message}")
+    # Generate expected HMAC (Base64, to match your bash)
+    digest = hmac.new(secret, message, hashlib.sha512).digest()
+    expected_sig = base64.b64encode(digest).decode()
 
-    # Generate expected HMAC
-    expected_sig = hmac.new(secret, message, hashlib.sha512).hexdigest()
-
-    print(f"Expected signature: {expected_sig}")
-
-    # Constant-time compare to avoid timing attacks
+    # Compare
     return hmac.compare_digest(expected_sig, signature)
 
-# @app.middleware("http")
+@app.middleware("http")
 async def hmac_auth(request: Request, call_next):
     # Skip authentication for root or docs endpoints
     if request.url.path in ["/", "/docs", "/openapi.json"]:
