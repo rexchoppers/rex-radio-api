@@ -62,7 +62,7 @@ async def read_root():
     return {"Hello": "World"}
 
 @app.get("/config/{field}")
-async def read_configuration(field: Literal["name", "description"]):
+async def read_configuration(field: Literal["name", "description", "genres"]):
     config = await Configuration.find_one(Configuration.field == field)
 
     if not config:
@@ -126,7 +126,7 @@ def verify_signature(method: str, path: str, body: bytes, timestamp: str, signat
     # Compare
     return hmac.compare_digest(expected_sig, signature)
 
-@app.middleware("http")
+# @app.middleware("http")
 async def hmac_auth(request: Request, call_next):
     # Skip authentication for root or docs endpoints
     if request.url.path in ["/", "/docs", "/openapi.json"]:
