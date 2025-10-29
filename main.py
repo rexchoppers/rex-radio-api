@@ -92,12 +92,19 @@ async def update_configuration(updates: List[UpdateConfigurationRequest]):
             else:
                 await Configuration(field=update.field, value=update.value).insert()
 
+        return JSONResponse(
+            {},
+            status_code=200
+        )
+
         return {"status": "ok"}
 
     except ValidationError as e:
+        print(e.errors())
         raise HTTPException(status_code=400, detail=e.errors())
 
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 def verify_signature(method: str, path: str, body: bytes, timestamp: str, signature: str, secret: bytes) -> bool:
@@ -121,7 +128,7 @@ def verify_signature(method: str, path: str, body: bytes, timestamp: str, signat
     # Constant-time compare to avoid timing attacks
     return hmac.compare_digest(expected_sig, signature)
 
-@app.middleware("http")
+# @app.middleware("http")
 async def hmac_auth(request: Request, call_next):
     # Skip authentication for root or docs endpoints
     if request.url.path in ["/", "/docs", "/openapi.json"]:
