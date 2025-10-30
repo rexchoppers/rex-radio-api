@@ -4,7 +4,7 @@ import hmac
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from beanie import init_beanie
 from dotenv import load_dotenv
@@ -16,7 +16,9 @@ from fastapi.responses import JSONResponse
 
 from logger import init_logger
 from models.configuration import Configuration
+from models.presenter import Presenter, ScheduleSlot
 from requests.update_configuration_request import UpdateConfigurationRequest
+from requests.presenter_requests import CreatePresenterRequest, UpdatePresenterRequest
 
 logger = init_logger("rex-radio.api")
 
@@ -38,7 +40,7 @@ async def lifespan(app: FastAPI):
 
     client = AsyncMongoClient(mongodb_uri)
     db = client["rex_radio"]
-    await init_beanie(database=db, document_models=[Configuration])
+    await init_beanie(database=db, document_models=[Configuration, Presenter])
 
     app.state.mongo_client = client
     logger.info("✅ MongoDB connected")
@@ -166,3 +168,62 @@ async def hmac_auth(request: Request, call_next):
         )
 
     return await call_next(request)
+
+
+@app.post("/presenters")
+async def create_presenter(payload: CreatePresenterRequest):
+    try:
+        presenter = Presenter(
+            name=payload.name,
+            voice_id=payload.voice_id,
+            model_id=payload.model_id,
+            schedules=payload.schedules,
+        )
+        await presenter.insert()
+        return presenter
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/presenters")
+async def list_presenters():
+    items = await Presenter.find_all().to_list()
+    return items
+
+
+@app.get("/presenters/{presenter_id}")
+async def get_presenter(presenter_id: str):
+    presenter = await Presenter.get(presenter_id)
+    if not presenter:
+        raise HTTPException(status_code=404, detail="Presenter not found")
+    return presenter
+
+
+@app.patch("/presenters/{presenter_id}")
+async def update_presenter(presenter_id: str, payload: UpdatePresenterRequest):
+    presenter = await Presenter.get(presenter_id)
+    if not presenter:
+        raise HTTPException(status_code=404, detail="Presenter not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
+        setattr(presenter, k, v)
+
+    try:
+        await presenter.save()
+        return presenter
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/presenters/{presenter_id}")
+async def delete_presenter(presenter_id: str):
+    presenter = await Presenter.get(presenter_id)
+    if not presenter:
+        raise HTTPException(status_code=404, detail="Presenter not found")
+    await presenter.delete()
+    return JSONResponse({}, status_code=204)
