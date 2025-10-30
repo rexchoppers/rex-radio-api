@@ -18,7 +18,7 @@ from logger import init_logger
 from models.configuration import Configuration
 from requests.update_configuration_request import UpdateConfigurationRequest
 
-logger = init_logger("rex-radio.daemon.api")
+logger = init_logger("rex-radio.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
