@@ -43,6 +43,7 @@ class Presenter(Document):
     name: str
     voice_id: str
     model_id: str
+    roles: List[str] = Field(default_factory=list)
     schedules: List[ScheduleSlot] = Field(default_factory=list)
 
     class Settings:
